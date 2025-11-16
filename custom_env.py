@@ -44,4 +44,4 @@ while not env_unwrapped.vehicle.crashed:
     obs, reward, done, truncated, info = env.step(action)
     step += 1
 
-print("Ego crashed! Simulation complete. The window will stay open.")
+print("ego crashed.")
