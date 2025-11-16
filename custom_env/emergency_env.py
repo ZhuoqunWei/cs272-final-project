@@ -108,14 +108,25 @@ class EmergencyEnv(HighwayEnv):
             self.controlled_vehicles.append(ego)
             self.road.vehicles.append(ego)
 
-            # spawn emergency vehicle behind ego
+            # spawn emergency vehicle in a random lane but behind ego position
             rand_emergency_type = self.np_random.choice(list(EmergencyVehicle.info.keys()))
+            
+            # get all available lanes
+            num_lanes = self.config["lanes_count"]
+            emergency_lane_id = self.np_random.integers(0, num_lanes)
+            emergency_lane = self.road.network.get_lane(("0", "1", emergency_lane_id))
+            
+            # spawn emergency vehicle behind ego (same x position offset, but in the random lane)
+            ego_x = ego.position[0]
+            ev_x = max(ego_x - 50, 0)  # don't go below 0
+            
             emergency = EmergencyVehicle(
                 road=self.road,
-                position=[max(ego.position[0] - 50, 0), ego.position[1]], # don't go below 0 for position
-                heading=ego.heading,
+                position=emergency_lane.position(ev_x, 0),
+                heading=emergency_lane.heading_at(ev_x),
                 emergency_type=rand_emergency_type
             )
+            emergency.lane_index = ("0", "1", emergency_lane_id)
             self.road.vehicles.append(emergency)
 
             # spawn regular vehicles like highway env
