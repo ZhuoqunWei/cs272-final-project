@@ -184,7 +184,8 @@ class EmergencyEnv(HighwayEnv):
             "on_road_reward": float(self.vehicle.on_road),
             "yield_emergency_reward": yield_reward
         }
-
+        # log rewards
+        self.last_rewards = rewards
         return rewards
 
 
