@@ -86,7 +86,7 @@ class EmergencyEnv(HighwayEnv):
         return config
 
     def _create_vehicles(self) -> None:
-        # same as highway env except adding emergency vehicle
+        # Modified to spawn ego and EV in middle lanes, other vehicles in side lanes
         other_vehicles_type = utils.class_from_path(self.config["other_vehicles_type"])
         other_per_controlled = near_split(
             self.config["vehicles_count"], num_bins=self.config["controlled_vehicles"]
@@ -94,12 +94,20 @@ class EmergencyEnv(HighwayEnv):
 
         self.controlled_vehicles = []
 
-        # spawn ego vehicle same way as highway env
+        # Define middle lanes (lanes 1 and 2 for a 4-lane road indexed 0-3)
+        num_lanes = self.config["lanes_count"]
+        middle_lanes = [1, 2]  # Middle 2 lanes
+        side_lanes = [0, 3]    # Side 2 lanes (leftmost and rightmost)
+
+        # spawn ego vehicle in one of the middle lanes
         for others in other_per_controlled:
+            # Randomly choose one of the middle lanes for ego
+            ego_lane_id = self.np_random.choice(middle_lanes)
+            
             ego = Vehicle.create_random(
                 self.road,
                 speed=25.0,
-                lane_id=self.config["initial_lane_id"],
+                lane_id=ego_lane_id,  # Force ego to middle lanes
                 spacing=self.config["ego_spacing"],
             )
             ego = self.action_type.vehicle_class(
@@ -108,15 +116,14 @@ class EmergencyEnv(HighwayEnv):
             self.controlled_vehicles.append(ego)
             self.road.vehicles.append(ego)
 
-            # spawn emergency vehicle in a random lane but behind ego position
+            # spawn emergency vehicle in one of the middle lanes (randomly chosen)
             rand_emergency_type = self.np_random.choice(list(EmergencyVehicle.info.keys()))
             
-            # get all available lanes
-            num_lanes = self.config["lanes_count"]
-            emergency_lane_id = self.np_random.integers(0, num_lanes)
+            # Randomly choose one of the middle lanes for emergency vehicle
+            emergency_lane_id = self.np_random.choice(middle_lanes)
             emergency_lane = self.road.network.get_lane(("0", "1", emergency_lane_id))
             
-            # spawn emergency vehicle behind ego (same x position offset, but in the random lane)
+            # spawn emergency vehicle behind ego
             ego_x = ego.position[0]
             ev_x = max(ego_x - 50, 0)  # don't go below 0
             
@@ -129,13 +136,22 @@ class EmergencyEnv(HighwayEnv):
             emergency.lane_index = ("0", "1", emergency_lane_id)
             self.road.vehicles.append(emergency)
 
-            # spawn regular vehicles like highway env
+            # spawn regular vehicles ONLY in side lanes and without lane changing behavior
             for _ in range(others):
+                # Randomly choose one of the side lanes for regular vehicles
+                side_lane_id = self.np_random.choice(side_lanes)
+                
+                # Create vehicle directly in the side lane
                 vehicle = other_vehicles_type.create_random(
                     self.road,
+                    lane_id=side_lane_id,  # Force spawn in side lanes
                     spacing=1 / self.config["vehicles_density"],
                 )
-                vehicle.randomize_behavior()
+                
+                # Disable lane changing for regular vehicles
+                vehicle.LANE_CHANGE_MIN_ACC_GAIN = 1000  # Make lane changes very unlikely
+                vehicle.LANE_CHANGE_MAX_BRAKING_IMPOSED = 0  # Don't change lanes
+                
                 self.road.vehicles.append(vehicle)
 
     def _rewards(self, action: Action) -> dict[str, float]:
